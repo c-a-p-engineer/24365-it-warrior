@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101827">
+  <meta name="description" content="24365 IT戦士 - IT障害をカードで沈静化し、連勤記録を伸ばすブラウザゲーム">
+  <title>24365 IT戦士</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">24 HOURS / 365 DAYS</p>
+        <h1>24365 IT戦士</h1>
+        <p>障害を見抜き、適切なカードで沈静化せよ。あなたは何連勤できるか。</p>
+      </div>
+      <button id="reset-save" class="ghost-button" type="button">記録を初期化</button>
+    </header>
+
+    <section id="setup-screen" class="panel">
+      <h2>配属設定</h2>
+      <div class="setup-grid">
+        <fieldset>
+          <legend>メインキャラクター</legend>
+          <div id="role-options" class="choice-grid"></div>
+        </fieldset>
+        <fieldset>
+          <legend>勤務先</legend>
+          <div id="company-options" class="choice-grid"></div>
+        </fieldset>
+      </div>
+      <div class="start-row">
+        <div>
+          <strong>支援枠</strong>
+          <p>新人は0名。昇進すると最大2名まで解放されます。</p>
+        </div>
+        <button id="start-game" class="primary-button" type="button">出勤する</button>
+      </div>
+      <section class="record-preview">
+        <h3>最高記録</h3>
+        <div id="best-record">まだ職務経歴がありません。</div>
+      </section>
+    </section>
+
+    <section id="game-screen" class="hidden">
+      <div class="status-grid">
+        <article class="metric"><span>連勤</span><strong id="day-value">1日</strong></article>
+        <article class="metric"><span>曜日</span><strong id="weekday-value">月曜日</strong></article>
+        <article class="metric"><span>体力</span><strong id="hp-value">20</strong></article>
+        <article class="metric"><span>信用</span><strong id="trust-value">20</strong></article>
+        <article class="metric"><span>職位</span><strong id="rank-value">新人</strong></article>
+        <article class="metric"><span>時間帯</span><strong id="phase-value">出勤時</strong></article>
+      </div>
+
+      <section class="panel compact">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">INCIDENT BOARD</p>
+            <h2>本日の障害</h2>
+          </div>
+          <button id="retire-button" class="ghost-button" type="button">自主退職</button>
+        </div>
+        <div id="incident-list" class="incident-list"></div>
+        <div id="business-panel" class="business-panel hidden">
+          <h3>障害なし：会社業務</h3>
+          <p>退勤して回復するか、余った時間で会社を強化できます。</p>
+          <div id="business-actions" class="choice-grid"></div>
+        </div>
+      </section>
+
+      <section class="panel compact">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">HAND</p>
+            <h2>手札</h2>
+          </div>
+          <p id="action-hint">カードを1枚選択してください。</p>
+        </div>
+        <div id="hand" class="card-grid"></div>
+        <div class="turn-actions">
+          <button id="pass-turn" class="ghost-button" type="button">カードを交換して次へ</button>
+          <button id="leave-early" class="primary-button hidden" type="button">退勤する</button>
+        </div>
+      </section>
+
+      <section class="panel compact log-panel">
+        <h2>対応ログ</h2>
+        <ol id="battle-log" aria-live="polite"></ol>
+      </section>
+    </section>
+
+    <section id="result-screen" class="panel hidden">
+      <p class="eyebrow">CAREER REPORT</p>
+      <h2>職務経歴書</h2>
+      <div id="career-sheet" class="career-sheet"></div>
+      <button id="retry-button" class="primary-button" type="button">もう一度転職活動する</button>
+    </section>
+  </main>
+  <script src="./app.js" defer></script>
+</body>
+</html>
