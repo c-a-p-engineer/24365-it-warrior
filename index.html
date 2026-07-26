@@ -2,96 +2,114 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#101827">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#eef4f8">
   <meta name="description" content="24365 IT戦士 - IT障害をカードで沈静化し、連勤記録を伸ばすブラウザゲーム">
   <title>24365 IT戦士</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <main class="app-shell">
-    <header class="hero">
+    <header class="topbar">
       <div>
         <p class="eyebrow">24 HOURS / 365 DAYS</p>
         <h1>24365 IT戦士</h1>
-        <p>障害を見抜き、適切なカードで沈静化せよ。あなたは何連勤できるか。</p>
       </div>
-      <button id="reset-save" class="ghost-button" type="button">記録を初期化</button>
+      <button id="reset-save" class="icon-button" type="button">記録初期化</button>
     </header>
 
-    <section id="setup-screen" class="panel">
-      <h2>配属設定</h2>
-      <div class="setup-grid">
-        <fieldset>
-          <legend>メインキャラクター</legend>
-          <div id="role-options" class="choice-grid"></div>
-        </fieldset>
-        <fieldset>
-          <legend>勤務先</legend>
-          <div id="company-options" class="choice-grid"></div>
-        </fieldset>
-      </div>
-      <div class="start-row">
+    <section id="setup-screen" class="setup-screen">
+      <div class="intro-panel">
+        <div class="hero-character" aria-hidden="true">🧑‍💻</div>
         <div>
-          <strong>支援枠</strong>
-          <p>新人は0名。昇進すると最大2名まで解放されます。</p>
+          <p class="eyebrow">CAREER START</p>
+          <h2>配属先と職種を選ぶ</h2>
+          <p>職種ごとの専門能力で障害の原因を見抜き、会社ごとの環境で連勤記録を伸ばします。</p>
         </div>
-        <button id="start-game" class="primary-button" type="button">出勤する</button>
       </div>
-      <section class="record-preview">
-        <h3>最高記録</h3>
-        <div id="best-record">まだ職務経歴がありません。</div>
+
+      <section class="selection-section">
+        <div class="section-title"><span>01</span><div><h2>メインキャラクター</h2><p>選んだ職種が調査能力とカード適性を決めます。</p></div></div>
+        <div id="role-options" class="character-grid"></div>
+      </section>
+
+      <section class="selection-section">
+        <div class="section-title"><span>02</span><div><h2>勤務先</h2><p>会社ごとに障害傾向と初期ステータスが変わります。</p></div></div>
+        <div id="company-options" class="company-grid"></div>
+      </section>
+
+      <section class="launch-panel">
+        <div>
+          <strong>支援キャラクター</strong>
+          <p>新人は0名。職位が上がると最大2名まで編成できます。</p>
+          <div id="best-record" class="best-record">まだ職務経歴がありません。</div>
+        </div>
+        <button id="start-game" class="primary-button" type="button">この会社に出勤</button>
       </section>
     </section>
 
-    <section id="game-screen" class="hidden">
-      <div class="status-grid">
-        <article class="metric"><span>連勤</span><strong id="day-value">1日</strong></article>
-        <article class="metric"><span>曜日</span><strong id="weekday-value">月曜日</strong></article>
-        <article class="metric"><span>体力</span><strong id="hp-value">20</strong></article>
-        <article class="metric"><span>信用</span><strong id="trust-value">20</strong></article>
-        <article class="metric"><span>職位</span><strong id="rank-value">新人</strong></article>
-        <article class="metric"><span>時間帯</span><strong id="phase-value">出勤時</strong></article>
-      </div>
-
-      <section class="panel compact">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">INCIDENT BOARD</p>
-            <h2>本日の障害</h2>
-          </div>
-          <button id="retire-button" class="ghost-button" type="button">自主退職</button>
+    <section id="game-screen" class="hidden game-screen">
+      <section class="day-header">
+        <div class="day-copy">
+          <span id="weekday-value" class="weekday-chip">月曜日</span>
+          <div><strong id="day-value">1日目</strong><small id="company-role-value">大企業・エンジニア</small></div>
         </div>
-        <div id="incident-list" class="incident-list"></div>
-        <div id="business-panel" class="business-panel hidden">
-          <h3>障害なし：会社業務</h3>
-          <p>退勤して回復するか、余った時間で会社を強化できます。</p>
-          <div id="business-actions" class="choice-grid"></div>
+        <div class="turn-track" aria-label="1日の進行">
+          <span data-phase="0">出勤</span><span data-phase="1">ランチ</span><span data-phase="2">定時後</span><span data-phase="3">深夜</span>
         </div>
       </section>
 
-      <section class="panel compact">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">HAND</p>
-            <h2>手札</h2>
+      <section class="office-layout">
+        <aside class="team-panel">
+          <div class="main-character-card">
+            <div id="main-character-avatar" class="character-avatar">🧑‍💻</div>
+            <div><span class="label">MAIN</span><h2 id="main-character-name">エンジニア</h2><p id="main-character-bonus"></p></div>
           </div>
-          <p id="action-hint">カードを1枚選択してください。</p>
+          <div class="support-list">
+            <div class="support-slot"><span>＋</span><small>支援枠1</small></div>
+            <div class="support-slot"><span>＋</span><small>支援枠2</small></div>
+          </div>
+          <div class="resource-list">
+            <div><span>体力</span><strong id="hp-value">20</strong></div>
+            <div><span>信用</span><strong id="trust-value">20</strong></div>
+            <div><span>職位</span><strong id="rank-value">新人</strong></div>
+            <div><span>時間</span><strong id="phase-value">出勤時</strong></div>
+          </div>
+        </aside>
+
+        <section class="incident-board">
+          <div class="board-heading">
+            <div><p class="eyebrow">INCIDENT BOARD</p><h2>本日の障害</h2></div>
+            <button id="retire-button" class="text-button" type="button">自主退職</button>
+          </div>
+          <div id="incident-list" class="incident-list"></div>
+          <div id="business-panel" class="business-panel hidden">
+            <div class="board-heading"><div><p class="eyebrow">OFFICE WORK</p><h2>会社業務</h2></div></div>
+            <p>障害がない時間は、退勤して休むか会社を成長させられます。</p>
+            <div id="business-actions" class="business-grid"></div>
+          </div>
+        </section>
+      </section>
+
+      <section class="hand-dock">
+        <div class="hand-heading">
+          <div><p class="eyebrow">YOUR HAND</p><h2>対応カード</h2></div>
+          <p id="action-hint">カードを選び、対応する障害を選択してください。</p>
         </div>
-        <div id="hand" class="card-grid"></div>
+        <div id="hand" class="card-hand"></div>
         <div class="turn-actions">
-          <button id="pass-turn" class="ghost-button" type="button">カードを交換して次へ</button>
-          <button id="leave-early" class="primary-button hidden" type="button">退勤する</button>
+          <button id="pass-turn" class="secondary-button" type="button">手札交換</button>
+          <button id="leave-early" class="primary-button hidden" type="button">本日は退勤</button>
         </div>
       </section>
 
-      <section class="panel compact log-panel">
-        <h2>対応ログ</h2>
+      <details class="activity-log">
+        <summary>対応ログを見る</summary>
         <ol id="battle-log" aria-live="polite"></ol>
-      </section>
+      </details>
     </section>
 
-    <section id="result-screen" class="panel hidden">
+    <section id="result-screen" class="result-screen hidden">
       <p class="eyebrow">CAREER REPORT</p>
       <h2>職務経歴書</h2>
       <div id="career-sheet" class="career-sheet"></div>
