@@ -1,0 +1,129 @@
+name: Add multiline logs
+
+on:
+  push:
+    paths:
+      - .github/workflows/add-multiline-logs.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+      - name: Add multiline log patterns
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          app_path = Path('app.js')
+          app = app_path.read_text()
+
+          start = app.index('function makeLog(forceMatch = false) {')
+          end = app.index('\nfunction spawnLog() {', start)
+          make_log = r'''function makeLog(forceMatch = false) {
+            const target = currentLevel();
+            const shouldMatch = forceMatch || Math.random() < 0.26;
+            let type = pick(['INFO', 'INFO', 'WARN', 'ERROR']);
+            let service = pick(SERVICES);
+            let action = pick(ACTIONS);
+            let status = pick(['200', '200', '201', '404', '500', '503']);
+            let id = pick(IDS);
+
+            if (shouldMatch) {
+              target.keys.forEach((key) => {
+                if (key === 'ERROR' || key === 'WARN') type = key;
+                else if (key === 'payment') service = 'payment';
+                else if (key === 'auth') service = 'auth';
+                else if (key === 'timeout') action = 'timeout';
+                else if (key === '500') status = '500';
+                else if (key === 'A82F') id = 'A82F';
+                else if (key === 'payrnent') service = 'payrnent';
+              });
+            } else {
+              const text = `${type} ${service} ${action} ${status} ${id}`;
+              if (target.keys.every((key) => text.includes(key))) {
+                service = service === 'payment' ? 'order' : service;
+                type = type === 'ERROR' ? 'INFO' : type;
+                status = status === '500' ? '200' : status;
+                id = id === 'A82F' ? 'C91B' : id;
+                action = action === 'timeout' ? 'complete' : action;
+              }
+            }
+
+            const now = new Date();
+            const time = [now.getHours(), now.getMinutes(), now.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':');
+            const multilineChance = Math.min(0.18 + state.level * 0.035, 0.46);
+            const multiline = !forceMatch && Math.random() < multilineChance;
+            const node = pick(['api-01', 'api-02', 'worker-03', 'db-primary', 'edge-02']);
+            const main = multiline
+              ? `${time} ${type.padEnd(5)} ${service} ${status}`
+              : `${time} ${type.padEnd(5)} ${service} ${action} ${status} REQ=${id}`;
+            const detail = multiline
+              ? pick([
+                  `↳ ${action} REQ=${id} node=${node}`,
+                  `↳ at ${service}.handler action=${action} REQ=${id}`,
+                  `↳ cause=${action} trace=${id} host=${node}`
+                ])
+              : '';
+            const searchableText = `${main} ${detail}`;
+            return {
+              id: ++state.rowId,
+              main,
+              detail,
+              multiline,
+              match: target.keys.every((key) => searchableText.includes(key)),
+              type
+            };
+          }
+          '''
+          app = app[:start] + make_log + app[end:]
+
+          app = app.replace(
+            "  row.className = `log-row type-${log.type.toLowerCase()}${tutorialMatch ? ' tutorial-target' : ''}`;",
+            "  row.className = `log-row type-${log.type.toLowerCase()}${log.multiline ? ' multi-line' : ''}${tutorialMatch ? ' tutorial-target' : ''}`;"
+          )
+          app = app.replace(
+            "  row.innerHTML = tokenize(log.text);",
+            "  row.innerHTML = log.multiline\n    ? `<span class=\"log-main\">${tokenize(log.main)}</span><span class=\"log-detail\">${tokenize(log.detail)}</span>`\n    : `<span class=\"log-main\">${tokenize(log.main)}</span>`;"
+          )
+          app_path.write_text(app)
+
+          css_path = Path('styles.css')
+          css = css_path.read_text()
+          css += r'''
+
+/* Two-line production logs */
+.log-row.multi-line{top:-72px;min-height:64px;padding:6px 9px;white-space:normal;display:flex;flex-direction:column;justify-content:center;gap:3px}
+.log-main,.log-detail{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.log-detail{padding-left:12px;border-left:2px solid rgba(99,216,255,.28);color:var(--muted);font-size:.76em;line-height:1.25}
+.log-row.type-error .log-detail{border-left-color:rgba(255,95,120,.45)}
+.log-row.type-warn .log-detail{border-left-color:rgba(255,209,102,.45)}
+@media(max-width:360px){.log-row.multi-line{min-height:60px;padding-top:5px;padding-bottom:5px}.log-detail{font-size:.7em}}
+'''
+          css_path.write_text(css)
+
+          readme_path = Path('README.md')
+          readme = readme_path.read_text()
+          marker = '- ERROR、WARN、複合条件、ステータスコード、ID、類似文字へ段階的に難化\n'
+          if marker in readme and '2行ログ' not in readme:
+              readme = readme.replace(marker, marker + '- 概要と詳細に分かれた2行ログが出現し、詳細行に検索対象が隠れる場合がある\n')
+          readme_path.write_text(readme)
+
+          loop_path = Path('docs/game-loop.md')
+          loop = loop_path.read_text()
+          if '## 2行ログ' not in loop:
+              loop += '''\n\n## 2行ログ\n\n- 一部ログは概要行と詳細行の2段で表示する\n- 詳細行には原因、リクエストID、ホスト、スタック情報などを表示する\n- 検索条件が詳細行だけに含まれる場合がある\n- 行全体を1つのタップ対象として扱う\n- 難易度が上がるほど2行ログの出現率も上がる\n'''
+          loop_path.write_text(loop)
+          PY
+
+          rm .github/workflows/add-multiline-logs.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app.js styles.css README.md docs/game-loop.md .github/workflows/add-multiline-logs.yml
+          git commit -m "2行ログと詳細行検索を追加"
+          git push origin master
