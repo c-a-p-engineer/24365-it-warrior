@@ -21,27 +21,37 @@
 - 成功：緑
 - 注意：黄
 - 失敗・炎上：赤
-- 生成画像へ文字を焼き込まない
+- 生成画像へ文字を焼き込まない。ただし正式ロゴは例外として採用済みデザインをそのまま使用する
 - スマートフォン320px幅で識別できるシルエットを優先する
 
 ## 画像素材
 
-| ID | 用途 | 状態 | 本番仕様 | 現在の代替 |
+| ID | 用途 | 状態 | ファイル・本番仕様 | 現在の代替 |
 |---|---|---|---|---|
-| `logo-main` | タイトルロゴ | 仮置き | 1600×700px、透過PNGまたはSVG。目、検索カーソル、ターミナル走査線。濃紺・シアン・白 | HTML文字＋絵文字 |
-| `ogp-main` | SNS共有画像 | 未着手 | 1200×630px、非透過WebP。流れるログと検索対象、エンジニアを大きく表示 | なし |
+| `logo-main` | タイトルロゴ | 本番 | `assets/logo/24365-it-warrior-logo.png`。タイトル画面、README、favicon、Apple Touch Iconに使用 | なし |
+| `ogp-main` | SNS共有画像 | 本番 | `assets/logo/24365-it-warrior-logo.png`をOGP・Twitter Cardへ設定。将来1200×630px専用画像を作成する場合は差し替える | 正式ロゴを兼用 |
 | `operator-main` | エンジニア | 仮置き | 768×768px、透過PNG。胸上、モニターを凝視、青系アクセント | 絵文字 |
 | `operator-win` | 正解表情 | 未着手 | 同一キャラ、眼鏡や目が光る、自信のある表情 | 絵文字 |
 | `operator-miss` | 誤検知表情 | 未着手 | 同一キャラ、汗・困惑 | 絵文字 |
 | `operator-panic` | 見落とし表情 | 未着手 | 同一キャラ、ログに埋もれる、焦り | 絵文字 |
 | `bg-terminal` | 監視端末背景 | 本番 | CSS。濃紺、走査線、低コントラスト | CSS |
 | `ui-target` | FIND条件パネル | 本番 | CSS。シアン枠、検索アイコン、条件文字を最大表示 | CSS |
-| `ui-fire` | 炎上度ゲージ | 本番 | CSS。黄から赤へ変化。数値併記 | CSS |
+| `ui-speed` | ログ速度ゲージ | 本番 | CSS。速度倍率を数値とゲージで表示 | CSS |
 | `ui-log-row` | ログ行 | 本番 | CSS。高さ46px以上、行全体をタップ可能 | CSS |
 | `ui-tutorial-hand` | 初回指示 | 仮置き | 256×256px、透過SVG/PNG。下からタップする手 | 絵文字 |
 | `fx-scanline` | 走査線 | 本番 | CSS。細いシアン線、2秒前後で周回 | CSS |
 | `fx-particle` | 正解粒子 | 本番 | CSS。小さな四角、シアン中心 | CSS |
 | `fx-noise` | 誤検知ノイズ | 本番 | CSS。0.3秒以内、操作を妨げない | CSS |
+
+## Webメタデータでの利用
+
+| 用途 | 設定先 | 参照 |
+|---|---|---|
+| favicon | `index.html` | `./assets/logo/24365-it-warrior-logo.png` |
+| Apple Touch Icon | `index.html` | `./assets/logo/24365-it-warrior-logo.png` |
+| Open Graph | `og:image` | `https://c-a-p-engineer.github.io/24365-it-warrior/assets/logo/24365-it-warrior-logo.png` |
+| Twitter Card | `twitter:image` | `https://c-a-p-engineer.github.io/24365-it-warrior/assets/logo/24365-it-warrior-logo.png` |
+| README | `README.md` | `assets/logo/24365-it-warrior-logo.png` |
 
 ## 音声素材
 
@@ -59,7 +69,7 @@
 | `se-target` | 条件変更 | 未着手 | 0.2〜0.4秒、走査開始音 |
 | `se-end` | 監視終了 | 未着手 | 0.8〜1.5秒、端末停止音 |
 
-## 配置予定
+## 配置
 
 ```text
 assets/
@@ -68,6 +78,7 @@ assets/
 │   └── se/
 ├── characters/
 ├── logo/
+│   └── 24365-it-warrior-logo.png
 └── ui/
 ```
 
@@ -80,3 +91,4 @@ assets/
 5. 320px幅と低い画面で表示確認する
 6. 音声追加時はミュート・音量設定を実装する
 7. 演出素材はログ本文の可読性を下げない
+8. OGP専用画像を追加する場合は1200×630pxを基準とし、現在のロゴ兼用設定を置き換える
