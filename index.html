@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
   <meta name="theme-color" content="#07111f">
-  <meta name="description" content="24365 IT戦士 ― 目grep。流れるログから条件に合う行を見つけてタップする短時間スマホゲーム。">
+  <meta name="description" content="24365 IT戦士 ― 目grep。流れるログから条件に合う行を見つけ、ライフが尽きるまで耐えるスマホゲーム。">
   <title>24365 IT戦士 ― 目grep</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
@@ -15,7 +15,7 @@
       <p class="eyebrow">24 HOURS / 365 DAYS</p>
       <h1>24365 IT戦士</h1>
       <p class="subtitle">目grep</p>
-      <p class="lead">流れるログから、見本と同じ異常を見つけろ。</p>
+      <p class="lead">流れるログから、見本と同じ異常を見つけろ。<br>見落とすたびにライフ減少。ログは徐々に加速する。</p>
       <div id="best-record" class="best-record"></div>
       <button id="start-button" class="primary-button" type="button">監視を開始</button>
     </section>
@@ -26,17 +26,17 @@
         <div class="hud-metrics">
           <span><small>SCORE</small><b id="score-value">0</b></span>
           <span><small>COMBO</small><b id="combo-value">0</b></span>
-          <span><small>TIME</small><b id="time-value">60</b></span>
+          <span><small>LIFE</small><b id="time-value">♥♥♥</b></span>
         </div>
         <button id="pause-button" class="icon-button" type="button" aria-label="一時停止">Ⅱ</button>
       </header>
 
       <section class="fire-panel">
-        <div class="fire-label"><span>🔥 炎上度</span><b id="fire-value">0</b></div>
+        <div class="fire-label"><span>⚡ ログ速度</span><b id="fire-value">1.0x</b></div>
         <div class="fire-track"><span id="fire-bar"></span></div>
       </section>
 
-      <section class="target-panel" aria-label="検索条件">
+      <section id="target-panel" class="target-panel" aria-label="検索条件">
         <span class="target-icon">🔍</span>
         <div><small>FIND</small><strong id="target-value">ERROR</strong></div>
         <span id="target-count" class="target-count">0 / 3</span>
