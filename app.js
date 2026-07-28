@@ -1,17 +1,19 @@
 const $ = (id) => document.getElementById(id);
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const pick = (items) => items[Math.floor(Math.random() * items.length)];
 
 const START_LIVES = 3;
 const LEVELS = [
-  { label: 'ERROR', icon: '🔴', keys: ['ERROR'], quota: 3 },
-  { label: 'WARN', icon: '🟡', keys: ['WARN'], quota: 4 },
-  { label: 'ERROR + payment', icon: '💳', keys: ['ERROR', 'payment'], quota: 4 },
-  { label: '500', icon: '💥', keys: ['500'], quota: 5 },
-  { label: 'timeout', icon: '⏱️', keys: ['timeout'], quota: 5 },
-  { label: 'ERROR + auth', icon: '🔐', keys: ['ERROR', 'auth'], quota: 6 },
-  { label: 'REQ=A82F', icon: '🧬', keys: ['A82F'], quota: 6 },
-  { label: 'payrnent', icon: '👁️', keys: ['payrnent'], quota: 7 }
+  { label: 'ERROR', icon: '🔴', keys: ['ERROR'], quota: 3, speed: 6200 },
+  { label: 'WARN', icon: '🟡', keys: ['WARN'], quota: 4, speed: 5700 },
+  { label: 'ERROR + payment', icon: '💳', keys: ['ERROR', 'payment'], quota: 4, speed: 5200 },
+  { label: '500', icon: '💥', keys: ['500'], quota: 5, speed: 4700 },
+  { label: 'timeout', icon: '⏱️', keys: ['timeout'], quota: 5, speed: 4300 },
+  { label: 'ERROR + auth', icon: '🔐', keys: ['ERROR', 'auth'], quota: 6, speed: 3900 },
+  { label: 'REQ=A82F', icon: '🧬', keys: ['A82F'], quota: 6, speed: 3500 },
+  { label: 'payrnent', icon: '👁️', keys: ['payrnent'], quota: 7, speed: 3200 }
 ];
+
 const SERVICES = ['auth', 'payment', 'cache', 'profile', 'order', 'search', 'mail', 'upload'];
 const ACTIONS = ['success', 'failed', 'timeout', 'retry', 'ready', 'denied', 'slow', 'complete'];
 const IDS = ['A82F', 'C91B', 'F10D', 'D44A', 'B77E', 'E09C'];
@@ -34,8 +36,9 @@ function makeState() {
     paused: false,
     tutorial: true,
     rowId: 0,
-    elapsedSpawns: 0,
-    speedFactor: 1
+    elapsed: 0,
+    speedFactor: 1,
+    lastSpeedNotice: 1
   };
 }
 
@@ -46,30 +49,11 @@ function startGame() {
   hide('result-screen');
   show('game-screen');
   $('log-lane').innerHTML = '';
-  document.body.classList.remove('human-grep', 'time-critical', 'paused');
   renderAll();
   setTarget(true);
-  scheduleSpawn(250);
+  scheduleSpawn(260);
   burst('SYSTEM MONITOR START', 'info');
   react('focus', '異常ログを探せ', '光った行をタップ');
-}
-
-function currentLevel() {
-  return LEVELS[Math.min(state.level, LEVELS.length - 1)];
-}
-
-function speedFactor() {
-  const progressBoost = state.elapsedSpawns * 0.012;
-  const levelBoost = state.level * 0.12;
-  return Math.min(3.2, 1 + progressBoost + levelBoost);
-}
-
-function travelTime() {
-  return Math.max(1650, 6600 / speedFactor());
-}
-
-function spawnInterval() {
-  return Math.max(300, 1450 / speedFactor());
 }
 
 function scheduleSpawn(delay) {
@@ -77,22 +61,34 @@ function scheduleSpawn(delay) {
   spawnTimer = setTimeout(() => {
     if (!state?.running) return;
     if (!state.paused) {
+      state.elapsed += delay / 1000;
+      updateSpeed();
       spawnLog();
-      state.elapsedSpawns += 1;
-      state.speedFactor = speedFactor();
-      renderAll();
-      announceSpeedMilestone();
     }
-    scheduleSpawn(spawnInterval() + Math.random() * 180);
+    const density = Math.max(260, currentTravelTime() / 4.6);
+    scheduleSpawn(density + Math.random() * 220);
   }, delay);
 }
 
-function announceSpeedMilestone() {
-  const step = Math.floor(state.speedFactor * 10);
-  if ([13, 16, 20, 25, 30].includes(step) && state.lastSpeedNotice !== step) {
-    state.lastSpeedNotice = step;
-    burst(`SPEED ${state.speedFactor.toFixed(1)}x`, 'combo');
+function currentLevel() {
+  return LEVELS[Math.min(state.level, LEVELS.length - 1)];
+}
+
+function currentTravelTime() {
+  return Math.max(1450, currentLevel().speed / state.speedFactor);
+}
+
+function updateSpeed() {
+  const progressBoost = state.found / 22;
+  const timeBoost = state.elapsed / 80;
+  state.speedFactor = Math.min(3.2, 1 + progressBoost + timeBoost);
+  const thresholds = [1.3, 1.6, 2, 2.5, 3];
+  const reached = thresholds.filter((value) => state.speedFactor >= value).pop();
+  if (reached && reached > state.lastSpeedNotice) {
+    state.lastSpeedNotice = reached;
+    burst(`SPEED ${reached.toFixed(1)}x`, reached >= 2.5 ? 'danger' : 'info');
     restart($('game-screen'), 'combo-aura');
+    react('panic', 'ログ加速', `${reached.toFixed(1)}倍速`);
   }
 }
 
@@ -110,7 +106,7 @@ function setTarget(initial = false) {
 
 function makeLog(forceMatch = false) {
   const target = currentLevel();
-  const shouldMatch = forceMatch || Math.random() < 0.25;
+  const shouldMatch = forceMatch || Math.random() < 0.26;
   let type = pick(['INFO', 'INFO', 'WARN', 'ERROR']);
   let service = pick(SERVICES);
   let action = pick(ACTIONS);
@@ -128,13 +124,13 @@ function makeLog(forceMatch = false) {
       else if (key === 'payrnent') service = 'payrnent';
     });
   } else {
-    let text = `${type} ${service} ${action} ${status} ${id}`;
+    const text = `${type} ${service} ${action} ${status} ${id}`;
     if (target.keys.every((key) => text.includes(key))) {
+      service = service === 'payment' ? 'order' : service;
       type = type === 'ERROR' ? 'INFO' : type;
-      service = service === 'payment' || service === 'payrnent' ? 'order' : service;
-      action = action === 'timeout' ? 'complete' : action;
       status = status === '500' ? '200' : status;
       id = id === 'A82F' ? 'C91B' : id;
+      action = action === 'timeout' ? 'complete' : action;
     }
   }
 
@@ -152,7 +148,7 @@ function spawnLog() {
   row.className = `log-row type-${log.type.toLowerCase()}${tutorialMatch ? ' tutorial-target' : ''}`;
   row.dataset.match = String(log.match);
   row.dataset.id = String(log.id);
-  row.style.setProperty('--travel-time', `${travelTime()}ms`);
+  row.style.setProperty('--travel-time', `${currentTravelTime()}ms`);
   row.innerHTML = tokenize(log.text);
   row.addEventListener('click', () => selectRow(row));
   row.addEventListener('animationend', (event) => {
@@ -189,7 +185,8 @@ function selectRow(row) {
   if (!state?.running || state.paused || row.dataset.handled === 'true') return;
   row.dataset.handled = 'true';
   state.taps += 1;
-  row.dataset.match === 'true' ? correctRow(row) : wrongRow(row);
+  if (row.dataset.match === 'true') correctRow(row);
+  else wrongRow(row);
 }
 
 function correctRow(row) {
@@ -214,18 +211,19 @@ function correctRow(row) {
   react('win', `${state.combo} COMBO`, '次の異常を探せ');
   row.addEventListener('animationend', () => row.remove(), { once: true });
   advanceTarget();
+  updateSpeed();
   renderAll();
 }
 
-function loseLife(message, row) {
+function loseLife(reason, row) {
   state.combo = 0;
-  state.lives -= 1;
+  state.lives = Math.max(0, state.lives - 1);
   if (row) createFragments(row, 'fire');
-  burst(`${message}  -1 LIFE`, 'danger');
+  burst(reason === '誤検知' ? 'FALSE POSITIVE' : 'MISSED!', 'danger');
   restart($('game-screen'), 'screen-hit');
-  restart($('time-value'), 'metric-denied');
-  restart($('operator-face'), 'operator-panic');
-  react('panic', message, state.lives > 0 ? `残りライフ ${state.lives}` : '監視継続不能');
+  restart($('time-value'), 'metric-pop');
+  restart($('operator-face'), state.lives ? 'operator-panic' : 'operator-miss');
+  react('panic', reason, `残りライフ ${state.lives}`);
   renderAll();
   if (state.lives <= 0) endGame('ライフが尽きた');
 }
@@ -238,9 +236,8 @@ function wrongRow(row) {
 }
 
 function missRow(row) {
-  if (!state?.running || row.dataset.handled === 'true') return;
-  row.dataset.handled = 'true';
-  loseLife('見落とし', row);
+  if (!state?.running) return;
+  loseLife('見落とした！', row);
 }
 
 function advanceTarget() {
@@ -318,22 +315,38 @@ function restart(element, className) {
   element.classList.add(className);
   element.addEventListener('animationend', () => element.classList.remove(className), { once: true });
 }
+
+const NOTICE_LABELS = {
+  'SYSTEM MONITOR START': '▶ 監視開始',
+  'NEW TARGET': '🔍 検索条件が変更',
+  'GOOD!': '✓ 正解',
+  'FALSE POSITIVE': '✕ 誤検知',
+  'MISSED!': '⚠ 見落とし',
+  'MONITOR END': '■ 監視終了'
+};
+
+function removeFxNode(node) {
+  if (node?.isConnected) node.remove();
+}
+
 function burst(text, tone = 'info') {
   const node = document.createElement('div');
-  node.className = `burst ${tone}`;
-  node.textContent = text;
+  node.className = `center-burst ${tone}`;
+  node.textContent = NOTICE_LABELS[text] || text;
   $('fx-layer').append(node);
-  node.addEventListener('animationend', () => node.remove(), { once: true });
+  node.addEventListener('animationend', () => removeFxNode(node), { once: true });
+  setTimeout(() => removeFxNode(node), 1600);
 }
 function popAt(row, text, tone) {
   const rect = row.getBoundingClientRect();
   const node = document.createElement('div');
-  node.className = `pop-text ${tone}`;
+  node.className = `point-pop ${tone}`;
   node.textContent = text;
   node.style.left = `${rect.left + rect.width / 2}px`;
   node.style.top = `${rect.top + rect.height / 2}px`;
   $('fx-layer').append(node);
-  node.addEventListener('animationend', () => node.remove(), { once: true });
+  node.addEventListener('animationend', () => removeFxNode(node), { once: true });
+  setTimeout(() => removeFxNode(node), 1200);
 }
 function createFragments(row, tone) {
   const rect = row.getBoundingClientRect();
