@@ -17,6 +17,7 @@ const LEVELS = {
 };
 
 const $ = (id) => document.getElementById(id);
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const randomItem = (items) => items[Math.floor(Math.random() * items.length)];
 
 let game = null;
@@ -41,6 +42,7 @@ function renderCompanyOptions() {
     button.addEventListener('click', () => {
       selectedCompanyId = button.dataset.company;
       renderCompanyOptions();
+      restartAnimation(button, 'company-picked');
     });
   });
 }
@@ -49,7 +51,7 @@ function emptyBoard() {
   return Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
 }
 
-function startGame() {
+async function startGame() {
   const company = selectedCompany();
   game = {
     company,
@@ -74,6 +76,9 @@ function startGame() {
   show('game-screen');
   renderGame();
   setStatus(`${company.name}へ入社。バグを本番障害になる前に処理しよう。`);
+  showDayTransition(1, false);
+  restartAnimation($('game-screen'), 'game-start-burst');
+  await wait(450);
 }
 
 function availableCells() {
@@ -160,7 +165,6 @@ function calculateMove(direction) {
 
   if (reverseAfter) working = reverseRows(working);
   if (transposeAfter) working = transpose(working);
-
   return { board: working, merges, gained, maxCreated };
 }
 
@@ -168,11 +172,16 @@ async function move(direction) {
   if (!game || game.gameOver || animationLocked || game.patchMode) return;
   const result = calculateMove(direction);
   if (boardsEqual(game.board, result.board)) {
-    bumpBoard();
+    animateInvalidMove(direction);
     return;
   }
 
   animationLocked = true;
+  animateBoardDirection(direction);
+  await wait(90);
+
+  const previousStability = game.stability;
+  const previousScore = game.score;
   game.board = result.board;
   game.moves += 1;
   game.combo = result.merges ? game.combo + result.merges : 0;
@@ -184,19 +193,32 @@ async function move(direction) {
 
   drainStability();
   spawnBug();
-  updateDay();
+  const dayChanged = updateDay();
   renderGame();
 
+  animateMetric('score-value', game.score - previousScore, 'score-pop');
+  if (game.stability < previousStability) animateStabilityDamage(previousStability - game.stability);
+
   if (result.merges) {
+    animateMerge(result.merges, result.maxCreated);
     showFloat(`MERGE ×${result.merges}`, 'good');
-    if (game.combo >= 3) showBanner(`${game.combo} COMBO`);
-  }
-  if (result.maxCreated === 5) {
-    showBanner('本番障害 発生');
-    setStatus('本番障害が発生。安定度の低下が加速する。');
+    showScoreBurst(result.gained);
+    if (game.combo >= 2) animateCombo(game.combo);
+  } else {
+    restartAnimation($('board'), 'board-settle');
   }
 
-  await wait(180);
+  if (result.maxCreated >= 4) {
+    criticalFlash(result.maxCreated);
+  }
+  if (result.maxCreated === 5) {
+    showBanner('🚨 本番障害 発生 🚨', 'critical');
+    setStatus('本番障害が発生。安定度の低下が加速する。');
+    restartAnimation($('engineer-face'), 'engineer-panic');
+  }
+  if (dayChanged) await wait(260);
+
+  await wait(330);
   animationLocked = false;
   checkGameOver();
 }
@@ -213,13 +235,14 @@ function drainStability() {
 
 function updateDay() {
   const nextDay = Math.floor(game.moves / MOVES_PER_DAY) + 1;
-  if (nextDay > game.day) {
-    game.day = nextDay;
-    game.patches += 1;
-    game.stability = Math.min(game.maxStability, game.stability + 4);
-    showBanner(`${game.day}日目`);
-    setStatus(game.day % 5 === 0 ? '金曜日。障害負荷が上昇している。' : '翌日へ。パッチを1つ補充した。');
-  }
+  if (nextDay <= game.day) return false;
+  game.day = nextDay;
+  game.patches += 1;
+  game.stability = Math.min(game.maxStability, game.stability + 4);
+  const friday = game.day % 5 === 0;
+  showDayTransition(game.day, friday);
+  setStatus(friday ? '金曜日。障害負荷が上昇している。' : '翌日へ。パッチを1つ補充した。');
+  return true;
 }
 
 function togglePatchMode() {
@@ -227,20 +250,29 @@ function togglePatchMode() {
   game.patchMode = !game.patchMode;
   $('patch-mode-button').classList.toggle('active', game.patchMode);
   $('board').classList.toggle('patch-mode', game.patchMode);
+  restartAnimation($('patch-mode-button'), game.patchMode ? 'patch-charge' : 'button-release');
+  if (game.patchMode) {
+    showBanner('PATCH MODE', 'patch');
+    createScanLines();
+  }
   setStatus(game.patchMode ? '除去するバグをタップ。大きいバグほど多くのパッチが必要。' : '盤面をスワイプしてバグをマージ。');
 }
 
-function patchTile(row, col) {
-  if (!game.patchMode || game.gameOver) return;
+async function patchTile(row, col) {
+  if (!game.patchMode || game.gameOver || animationLocked) return;
   const level = game.board[row][col];
   if (!level) return;
   const cost = LEVELS[level].patchCost;
   if (game.patches < cost) {
     showFloat(`パッチ不足 -${cost}`, 'danger');
     bumpTile(row, col);
+    restartAnimation($('patch-value'), 'metric-denied');
     return;
   }
 
+  animationLocked = true;
+  const tile = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+  await animatePatchBeam(tile, LEVELS[level].icon);
   game.patches -= cost;
   game.board[row][col] = 0;
   const reward = Math.round(LEVELS[level].score * 1.4 * game.company.scoreRate);
@@ -250,7 +282,12 @@ function patchTile(row, col) {
   game.combo = 0;
   renderGame();
   showFloat(`FIX +${reward}`, 'good');
+  showParticles('good', 16);
+  restartAnimation($('stability-bar'), 'stability-heal');
+  restartAnimation($('engineer-face'), 'engineer-win');
   setStatus(`${LEVELS[level].name}バグを修正。本番安定度が回復した。`);
+  await wait(300);
+  animationLocked = false;
 }
 
 function canMove() {
@@ -269,9 +306,15 @@ function checkGameOver() {
   if (!canMove()) return endGame('盤面がバグで埋まり、修正不能になった');
 }
 
-function endGame(reason) {
+async function endGame(reason) {
   if (!game || game.gameOver) return;
   game.gameOver = true;
+  animationLocked = true;
+  restartAnimation($('game-screen'), 'gameover-glitch');
+  showBanner('SYSTEM DOWN', 'critical');
+  showParticles('danger', 26);
+  await wait(850);
+
   const record = {
     days: game.day,
     score: game.score,
@@ -290,6 +333,8 @@ function endGame(reason) {
   $('result-title').textContent = reason.includes('自主') ? '自主退職しました' : '本番環境が停止しました';
   hide('game-screen');
   show('result-screen');
+  restartAnimation($('result-screen'), 'result-drop');
+  animationLocked = false;
 }
 
 function renderGame() {
@@ -303,12 +348,13 @@ function renderGame() {
   $('engineer-face').textContent = game.stability <= 25 ? '😵‍💫' : game.board.flat().includes(5) ? '😱' : '🧑‍💻';
   $('patch-mode-button').classList.toggle('active', game.patchMode);
   $('board').classList.toggle('patch-mode', game.patchMode);
+  $('game-screen').classList.toggle('friday-mode', game.day % 5 === 0);
 
   $('board').innerHTML = game.board.map((row, rowIndex) => row.map((level, colIndex) => {
     const meta = level ? LEVELS[level] : null;
     const spawned = game.lastSpawn === `${rowIndex}-${colIndex}` ? 'spawned' : '';
     return `<button class="bug-cell ${meta?.className || 'empty'} ${spawned}" data-row="${rowIndex}" data-col="${colIndex}" type="button" aria-label="${meta ? `${meta.name}バグ` : '空き'}">
-      ${meta ? `<span class="bug-icon">${meta.icon}</span><strong>${meta.name}</strong><small>修正 ${meta.patchCost}</small>` : ''}
+      ${meta ? `<span class="bug-icon">${meta.icon}</span><strong>${meta.name}</strong><small>修正 ${meta.patchCost}</small><i class="tile-shine"></i>` : ''}
     </button>`;
   }).join('')).join('');
   game.lastSpawn = null;
@@ -327,6 +373,62 @@ function renderBest() {
 
 function setStatus(message) {
   $('status-message').textContent = message;
+  restartAnimation($('status-message'), 'status-type');
+}
+
+function restartAnimation(element, className) {
+  if (!element) return;
+  element.classList.remove(className);
+  void element.offsetWidth;
+  element.classList.add(className);
+  element.addEventListener('animationend', () => element.classList.remove(className), { once: true });
+}
+
+function animateBoardDirection(direction) {
+  const board = $('board');
+  ['move-left', 'move-right', 'move-up', 'move-down'].forEach((name) => board.classList.remove(name));
+  restartAnimation(board, `move-${direction}`);
+  document.querySelectorAll('.bug-cell:not(.empty)').forEach((cell, index) => {
+    cell.style.setProperty('--delay', `${index * 12}ms`);
+    restartAnimation(cell, 'tile-slide');
+  });
+}
+
+function animateInvalidMove(direction) {
+  restartAnimation($('board'), `invalid-${direction}`);
+  restartAnimation($('engineer-face'), 'engineer-confused');
+  showFloat('動かせない！', 'danger');
+}
+
+function animateMerge(count, maxLevel) {
+  restartAnimation($('board'), 'merge-impact');
+  document.querySelectorAll('.bug-cell:not(.empty)').forEach((cell) => restartAnimation(cell, 'merge-pop'));
+  showParticles(maxLevel >= 4 ? 'danger' : 'good', Math.min(10 + count * 6, 28));
+  restartAnimation($('patch-value'), 'metric-pop');
+}
+
+function animateCombo(combo) {
+  showBanner(`${combo} COMBO`, combo >= 5 ? 'critical' : 'combo');
+  restartAnimation($('game-screen'), combo >= 5 ? 'combo-overdrive' : 'combo-aura');
+}
+
+function animateStabilityDamage(amount) {
+  if (!amount) return;
+  restartAnimation($('stability-wrap') || document.querySelector('.stability-wrap'), 'stability-hit');
+  restartAnimation($('stability-value'), 'metric-damage');
+  restartAnimation($('engineer-face'), amount >= 7 ? 'engineer-panic' : 'engineer-hit');
+  screenFlash(amount >= 7 ? 'critical' : 'damage');
+  showFloat(`安定度 -${amount}`, 'danger');
+}
+
+function animateMetric(id, delta, className) {
+  if (!delta) return;
+  restartAnimation($(id), className);
+}
+
+function criticalFlash(level) {
+  screenFlash(level === 5 ? 'critical' : 'warning');
+  restartAnimation($('board'), level === 5 ? 'critical-impact' : 'warning-impact');
 }
 
 function showFloat(text, tone) {
@@ -337,44 +439,94 @@ function showFloat(text, tone) {
   node.addEventListener('animationend', () => node.remove(), { once: true });
 }
 
-function showBanner(text) {
+function showScoreBurst(score) {
+  if (!score) return;
   const node = document.createElement('div');
-  node.className = 'combo-banner';
+  node.className = 'score-burst';
+  node.textContent = `+${Math.round(score * game.company.scoreRate)}`;
+  $('fx-layer').append(node);
+  node.addEventListener('animationend', () => node.remove(), { once: true });
+}
+
+function showBanner(text, tone = 'combo') {
+  const node = document.createElement('div');
+  node.className = `combo-banner ${tone}`;
   node.textContent = text;
   $('fx-layer').append(node);
   node.addEventListener('animationend', () => node.remove(), { once: true });
 }
 
+function showDayTransition(day, friday) {
+  const node = document.createElement('div');
+  node.className = `day-transition ${friday ? 'friday' : ''}`;
+  node.innerHTML = `<small>${friday ? 'FRIDAY INCIDENT BOOST' : 'NEXT WORKDAY'}</small><strong>${day}日目</strong>`;
+  $('fx-layer').append(node);
+  node.addEventListener('animationend', () => node.remove(), { once: true });
+  if (friday) {
+    screenFlash('critical');
+    showParticles('danger', 20);
+  }
+}
+
+function showParticles(tone = 'good', count = 14) {
+  const rect = $('board').getBoundingClientRect();
+  const layer = $('fx-layer');
+  for (let index = 0; index < count; index += 1) {
+    const particle = document.createElement('i');
+    particle.className = `particle ${tone}`;
+    particle.style.left = `${rect.left + rect.width / 2}px`;
+    particle.style.top = `${rect.top + rect.height / 2}px`;
+    particle.style.setProperty('--x', `${(Math.random() - 0.5) * rect.width * 0.9}px`);
+    particle.style.setProperty('--y', `${(Math.random() - 0.5) * rect.height * 0.9}px`);
+    particle.style.setProperty('--r', `${Math.random() * 540 - 270}deg`);
+    particle.style.animationDelay = `${Math.random() * 80}ms`;
+    layer.append(particle);
+    particle.addEventListener('animationend', () => particle.remove(), { once: true });
+  }
+}
+
+function screenFlash(tone) {
+  const node = document.createElement('div');
+  node.className = `screen-flash ${tone}`;
+  $('fx-layer').append(node);
+  node.addEventListener('animationend', () => node.remove(), { once: true });
+}
+
+function createScanLines() {
+  const node = document.createElement('div');
+  node.className = 'scan-lines';
+  $('fx-layer').append(node);
+  node.addEventListener('animationend', () => node.remove(), { once: true });
+}
+
+async function animatePatchBeam(tile, icon) {
+  if (!tile) return;
+  const rect = tile.getBoundingClientRect();
+  const node = document.createElement('div');
+  node.className = 'patch-beam';
+  node.innerHTML = `<span>🩹</span><b>${icon}</b>`;
+  node.style.left = `${rect.left + rect.width / 2}px`;
+  node.style.top = `${rect.top + rect.height / 2}px`;
+  $('fx-layer').append(node);
+  restartAnimation(tile, 'patch-target');
+  screenFlash('heal');
+  await wait(520);
+  node.remove();
+}
+
 function bumpBoard() {
-  $('board').classList.remove('bump');
-  void $('board').offsetWidth;
-  $('board').classList.add('bump');
+  restartAnimation($('board'), 'bump');
 }
 
 function bumpTile(row, col) {
   const tile = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-  if (!tile) return;
-  tile.classList.remove('bump-tile');
-  void tile.offsetWidth;
-  tile.classList.add('bump-tile');
-}
-
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  restartAnimation(tile, 'bump-tile');
 }
 
 function show(id) { $(id).classList.remove('hidden'); }
 function hide(id) { $(id).classList.add('hidden'); }
-
-function openDialog(id) {
-  const dialog = $(id);
-  if (!dialog.open) dialog.showModal();
-}
-
-function closeDialog(id) {
-  const dialog = $(id);
-  if (dialog.open) dialog.close();
-}
+function openDialog(id) { const dialog = $(id); if (!dialog.open) dialog.showModal(); }
+function closeDialog(id) { const dialog = $(id); if (dialog.open) dialog.close(); }
 
 $('start-button').addEventListener('click', startGame);
 $('retry-button').addEventListener('click', startGame);
@@ -394,7 +546,10 @@ $('retire-button').addEventListener('click', () => {
 });
 
 document.querySelectorAll('[data-move]').forEach((button) => {
-  button.addEventListener('click', () => move(button.dataset.move));
+  button.addEventListener('click', () => {
+    restartAnimation(button, 'direction-press');
+    move(button.dataset.move);
+  });
 });
 
 $('board').addEventListener('touchstart', (event) => {
