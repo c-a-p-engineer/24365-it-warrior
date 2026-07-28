@@ -1,75 +1,425 @@
-const ENGINEER={id:'engineer',name:'エンジニア',avatar:'🧑‍💻',stats:{programming:5,infrastructure:2,customer:1,ai:2,research:3},bonus:'プログラミングカードの効果＋2'};
-const COMPANIES=[
-{id:'enterprise',name:'大企業',icon:'🏢',desc:'安定しているが管理タスクが多い',hp:24,trust:24,taskMod:0},
-{id:'ses',name:'SES',icon:'🔀',desc:'現場変更が多くタスク数が多い',hp:22,trust:20,taskMod:1},
-{id:'contract',name:'受託開発',icon:'🤝',desc:'顧客対応と短納期タスクが多い',hp:20,trust:22,taskMod:1},
-{id:'service',name:'自社サービス',icon:'🚀',desc:'開発と運用タスクが混在する',hp:21,trust:21,taskMod:0}
+const BOARD_SIZE = 4;
+const MOVES_PER_DAY = 10;
+
+const COMPANIES = [
+  { id: 'enterprise', name: '大企業', icon: '🏢', desc: '安定度が高く、パッチも多い', stability: 120, patches: 3, spawnChance2: 0.08, scoreRate: 1 },
+  { id: 'ses', name: 'SES', icon: '🔀', desc: '得点は高いが大きなバグが出やすい', stability: 100, patches: 2, spawnChance2: 0.25, scoreRate: 1.25 },
+  { id: 'contract', name: '受託開発', icon: '🤝', desc: '短期決戦。安定度は低いがパッチ効率が高い', stability: 85, patches: 4, spawnChance2: 0.18, scoreRate: 1.15 },
+  { id: 'service', name: '自社サービス', icon: '🚀', desc: '連続マージで得点が伸びる', stability: 100, patches: 2, spawnChance2: 0.12, scoreRate: 1.05, comboBonus: true }
 ];
-const TYPE_META={programming:{label:'PROGRAMMING',icon:'⌨️'},infrastructure:{label:'INFRA',icon:'☁️'},customer:{label:'CUSTOMER',icon:'💬'},ai:{label:'AI',icon:'🤖'},management:{label:'MANAGEMENT',icon:'📋'}};
-const CARDS=[
-{id:'logs',name:'ログを読む',type:'programming',power:3,desc:'原因または属性を調査する。'},
-{id:'patch',name:'修正パッチ',type:'programming',power:7,desc:'開発・バグ系に強い。'},
-{id:'review',name:'コードレビュー',type:'programming',power:5,desc:'開発・品質タスクに有効。'},
-{id:'restart',name:'再起動',type:'infrastructure',power:5,desc:'運用系に有効。外すと危険。',risky:true},
-{id:'scale',name:'オートスケール',type:'infrastructure',power:7,desc:'クラウド・負荷対応に強い。'},
-{id:'talk',name:'顧客説明',type:'customer',power:6,desc:'顧客・炎上を沈静化する。'},
-{id:'scope',name:'スコープ調整',type:'customer',power:5,desc:'仕様・納期タスクに有効。'},
-{id:'aiAnalyze',name:'AI分析',type:'ai',power:4,desc:'複数情報を調査する。'},
-{id:'aiCode',name:'AI実装',type:'ai',power:8,desc:'高出力だが誤適用時は危険。',risky:true},
-{id:'assign',name:'担当者アサイン',type:'management',power:5,desc:'採用・調整・人的タスクに有効。'},
-{id:'plan',name:'進行整理',type:'management',power:5,desc:'管理・納期タスクに有効。'},
-{id:'escalate',name:'エスカレーション',type:'management',power:4,desc:'危険度を1下げる。'}
-];
-const TASK_TEMPLATES=[
-{id:'feature',name:'新機能の実装',icon:'🧩',attrs:['programming','management'],cause:'要件と実装範囲の整理不足',need:{programming:3},research:3,carry:true,base:9},
-{id:'bug',name:'本番バグ修正',icon:'🐛',attrs:['programming','bug'],cause:'未処理の例外',need:{programming:3},research:3,carry:false,base:9},
-{id:'db',name:'DB負荷対応',icon:'🗄️',attrs:['infrastructure','cloud'],cause:'接続数と負荷の集中',need:{infrastructure:4},research:4,carry:false,base:11},
-{id:'cloud',name:'クラウド構成変更',icon:'☁️',attrs:['infrastructure','management'],cause:'構成差分の確認不足',need:{infrastructure:4},research:4,carry:true,base:10},
-{id:'spec',name:'仕様変更の整理',icon:'📝',attrs:['customer','management'],cause:'要件合意の不足',need:{customer:3},research:3,carry:true,base:9},
-{id:'client',name:'顧客への状況説明',icon:'📞',attrs:['customer','management'],cause:'進捗共有の不足',need:{customer:3},research:3,carry:false,base:8},
-{id:'fire',name:'炎上案件の鎮火',icon:'🔥',attrs:['customer','fire'],cause:'納期遅延と説明不足',need:{customer:4},research:4,carry:false,base:12},
-{id:'ai',name:'AI生成物の検証',icon:'🤖',attrs:['ai','programming'],cause:'生成結果の未検証',need:{ai:4,programming:3},research:5,carry:true,base:11},
-{id:'hire',name:'採用面接と評価',icon:'🧑‍🤝‍🧑',attrs:['management','customer'],cause:'採用基準の不一致',need:{customer:3},research:4,carry:true,base:8},
-{id:'sales',name:'提案資料の作成',icon:'📣',attrs:['customer','management'],cause:'顧客課題の把握不足',need:{customer:3},research:3,carry:true,base:8},
-{id:'handover',name:'引き継ぎ対応',icon:'📚',attrs:['management','programming'],cause:'資料が古く属人化している',need:{programming:2,customer:2},research:4,carry:true,base:10},
-{id:'release',name:'金曜リリース対応',icon:'🚨',attrs:['programming','infrastructure','management'],cause:'確認工程を省略したリリース',need:{programming:4,infrastructure:3},research:5,carry:false,base:14}
-];
-const WEEKDAYS=['月曜日','火曜日','水曜日','木曜日','金曜日','土曜日','日曜日'];
-const PHASES=['出勤時','ランチ','定時後','深夜対応'];
-const DEADLINE_LABELS=['出勤中','ランチまで','定時まで','本日深夜まで'];
-const RANKS=[{name:'新人',days:1},{name:'一般社員',days:4},{name:'リーダー',days:10},{name:'課長',days:20},{name:'部長',days:35}];
-let state=null,selectedCardIndex=null,animationLocked=false;
-const $=id=>document.getElementById(id),wait=ms=>new Promise(r=>setTimeout(r,ms));
-const sample=a=>a[Math.floor(Math.random()*a.length)],shuffle=a=>[...a].sort(()=>Math.random()-.5);
-function selectedCompany(){return COMPANIES.find(x=>x.id===document.querySelector('[name=company]:checked')?.value)||COMPANIES[0]}
-function fxLayer(){let x=document.querySelector('.fx-layer');if(!x){x=document.createElement('div');x.className='fx-layer';document.body.append(x)}return x}
-function restartAnimation(el,c){if(!el)return;el.classList.remove(c);void el.offsetWidth;el.classList.add(c);el.addEventListener('animationend',()=>el.classList.remove(c),{once:true})}
-function floatText(el,text,tone='good'){if(!el)return;const r=el.getBoundingClientRect(),n=document.createElement('div');n.className=`fx-text ${tone}`;n.textContent=text;n.style.left=`${r.left+r.width/2}px`;n.style.top=`${r.top+r.height/2}px`;fxLayer().append(n);n.addEventListener('animationend',()=>n.remove(),{once:true})}
-function combo(text){const n=document.createElement('div');n.className='combo-banner';n.textContent=text;document.body.append(n);n.addEventListener('animationend',()=>n.remove(),{once:true})}
-async function flyCard(ci,ti,icon){const a=document.querySelector(`[data-card="${ci}"]`),b=document.querySelector(`[data-task="${ti}"]`);if(!a||!b)return;const ar=a.getBoundingClientRect(),br=b.getBoundingClientRect(),n=document.createElement('div');n.className='fx-card';n.textContent=icon;n.style.left=`${ar.left+ar.width/2}px`;n.style.top=`${ar.top+ar.height/2}px`;n.style.setProperty('--dx',`${br.left+br.width/2-(ar.left+ar.width/2)}px`);n.style.setProperty('--dy',`${br.top+br.height/2-(ar.top+ar.height/2)}px`);fxLayer().append(n);restartAnimation($('main-character-avatar'),'character-attack');await wait(450);n.remove()}
-function renderSetup(){$('company-options').innerHTML=COMPANIES.map((c,i)=>`<label class="choice ${i?'':'selected'}"><input hidden type="radio" name="company" value="${c.id}" ${i?'':'checked'}><span class="choice-avatar">${c.icon}</span><strong>${c.name}</strong><small>${c.desc}</small></label>`).join('');document.querySelectorAll('.choice input').forEach(x=>x.addEventListener('change',e=>document.querySelectorAll('[name=company]').forEach(i=>i.closest('.choice').classList.toggle('selected',i.checked))));renderBest()}
-function startGame(){const company=selectedCompany();state={day:1,phase:0,hp:company.hp,trust:company.trust,role:ENGINEER,company,tasks:[],deck:shuffle([...CARDS,...CARDS.slice(0,4)].map(c=>({...c}))),hand:[],resolved:0,unknownResolved:0,history:[`1日目 ${company.name}へエンジニアとして入社`],reason:''};drawTo(5);generateDay();selectedCardIndex=null;show('game-screen');hide('setup-screen');hide('result-screen');render()}
-function drawTo(n){while(state.hand.length<n){if(!state.deck.length)state.deck=shuffle(CARDS.map(c=>({...c})));state.hand.push(state.deck.shift())}}
-function currentRank(){return [...RANKS].reverse().find(r=>state.day>=r.days)||RANKS[0]}
-function createTask(weekday){let pool=TASK_TEMPLATES;if(weekday===4)pool=[...TASK_TEMPLATES,...TASK_TEMPLATES.filter(x=>x.id==='release'||x.id==='fire')];const t=sample(pool),max=t.base+Math.floor(state.day/7)+(weekday===4?2:0);let deadlineDay=state.day,deadlinePhase=t.carry?3:sample([1,2,3]);if(t.carry&&Math.random()<.72)deadlineDay=state.day+1;if(t.id==='release')deadlinePhase=3;return {...t,uid:crypto.randomUUID?.()||String(Math.random()),max,remain:max,danger:weekday===4?3:2,revealedAttrs:[],causeKnown:false,deadlineDay,deadlinePhase}}
-function generateDay(){state.phase=0;selectedCardIndex=null;const wd=(state.day-1)%7;state.tasks=state.tasks.filter(t=>t.deadlineDay>=state.day);const target=Math.min(5,Math.max(3,3+state.company.taskMod+(wd===4?1:0)));while(state.tasks.length<target)state.tasks.push(createTask(wd));log(`${state.day}日目 ${WEEKDAYS[wd]}。${state.tasks.length}件のタスクを開始。`);autoInspect()}
-function replenishTasks(){const wd=(state.day-1)%7;while(state.tasks.length<2){state.tasks.push(createTask(wd));log('追加タスクが割り込んだ。')}autoInspect()}
-function autoInspect(){state.tasks.forEach(t=>{if(t.inspected)return;t.inspected=true;const s=state.role.stats,relevant=Object.entries(t.need).some(([k,v])=>s[k]>=v),research=s.research>=t.research;if(relevant||research){t.causeKnown=true;t.revealedAttrs=[...t.attrs]}else t.revealedAttrs=t.attrs.filter(a=>{const v=s[a]||0,n=t.need[a]||4;return v>0&&Math.random()<Math.max(.15,.75-(n-v)*.2)})})}
-function inspectTask(t,card){const s=state.role.stats;if(s.research+card.power>=t.research+4||Math.random()<.65){t.causeKnown=true;t.revealedAttrs=[...t.attrs];return true}const hidden=t.attrs.filter(a=>!t.revealedAttrs.includes(a));if(hidden.length)t.revealedAttrs.push(sample(hidden));return false}
-function cardMatches(c,t){const a={programming:['programming','bug'],infrastructure:['infrastructure','cloud'],customer:['customer','fire'],ai:['ai'],management:['management']};return a[c.type]?.some(x=>t.attrs.includes(x))}
-function deadlineText(t){if(t.deadlineDay>state.day)return `納期：${t.deadlineDay-state.day===1?'明日':'あと'+(t.deadlineDay-state.day)+'日'}中`;return `納期：${DEADLINE_LABELS[t.deadlinePhase]}`}
-function isUrgent(t){return t.deadlineDay===state.day&&t.deadlinePhase<=state.phase+1}
-function overdueTask(){return state.tasks.find(t=>t.deadlineDay<state.day||(t.deadlineDay===state.day&&t.deadlinePhase<state.phase))}
-async function useCard(ci,ti){if(animationLocked||!state||state.phase>=4)return;const card=state.hand[ci],task=state.tasks[ti];if(!card||!task)return;animationLocked=true;await flyCard(ci,ti,(TYPE_META[card.type]||TYPE_META.management).icon);const target=document.querySelector(`[data-task="${ti}"]`);if(card.id==='logs'||card.id==='aiAnalyze'){const known=inspectTask(task,card);floatText(target,known?'原因特定':'属性判明');combo(known?'調査成功：最適対応を開示':'調査で情報を追加')}else if(card.id==='escalate'){task.danger=Math.max(1,task.danger-1);floatText(target,'危険度 -1')}else{let power=card.power;if(card.type==='programming')power+=2;if(!task.causeKnown)power=Math.ceil(power*.7);if(cardMatches(card,task)){task.remain=Math.max(0,task.remain-power);restartAnimation(target,'task-hit');floatText(target,`進捗 +${power}`);if(task.causeKnown)combo('適性対応！')}else{task.danger=Math.min(5,task.danger+(card.risky?2:1));restartAnimation(target,'task-wrong');restartAnimation($('game-screen'),'screen-shake');floatText(target,'危険度上昇','danger')}}state.hand.splice(ci,1);state.deck.push(card);drawTo(5);selectedCardIndex=null;if(task.remain<=0){state.resolved++;if(!task.causeKnown)state.unknownResolved++;restartAnimation(target,'task-clear');await wait(350);state.tasks=state.tasks.filter(x=>x.uid!==task.uid);replenishTasks()}animationLocked=false;advancePhase()}
-function enemyAction(){state.tasks.forEach((t,i)=>{const d=t.danger+(t.attrs.includes('customer')?1:0);if(t.attrs.includes('customer')||t.attrs.includes('fire'))state.trust-=d;else state.hp-=d;const el=document.querySelector(`[data-task="${i}"]`);restartAnimation(el,'task-wrong');floatText(el,`負荷 +${d}`,'danger')});restartAnimation($('game-screen'),'screen-shake')}
-function advancePhase(){state.phase++;const overdue=overdueTask();if(overdue)return endGame(`${overdue.name}の納期を超過した`);if(state.phase<4)enemyAction();if(state.hp<=0)return endGame('過労による休職');if(state.trust<=0)return endGame('信用失墜による契約終了');if(state.phase>=4)endDay();else render()}
-function passTurn(){if(animationLocked)return;const c=state.hand.shift();state.deck.push(c);drawTo(5);selectedCardIndex=null;advancePhase()}
-function endDay(){const fatal=state.tasks.find(t=>t.deadlineDay<=state.day);if(fatal)return endGame(`${fatal.name}を納期までに完了できなかった`);state.tasks.forEach(t=>{t.danger=Math.min(5,t.danger+1);t.max+=2;t.remain+=2;t.inspected=false});state.day++;if((state.day-1)%7===0){const opts=COMPANIES.filter(c=>c.id!==state.company.id);if(state.company.id==='ses'||Math.random()<.35){state.company=sample(opts);state.history.push(`${state.day}日目 ${state.company.name}へ転職`);state.hp=Math.min(30,state.hp+4)}else{state.history.push(`${state.day}日目 ${state.company.name}に残留`);state.trust=Math.min(30,state.trust+2)}}generateDay();render()}
-function endGame(reason){const r={days:state.day,role:state.role.name,company:state.company.name,rank:currentRank().name,resolved:state.resolved,unknown:state.unknownResolved,history:state.history,reason};const best=JSON.parse(localStorage.getItem('itWarriorBest')||'null');if(!best||r.days>best.days)localStorage.setItem('itWarriorBest',JSON.stringify(r));renderCareer(r);hide('game-screen');show('result-screen')}
-function render(){const wd=WEEKDAYS[(state.day-1)%7];$('day-value').textContent=`${state.day}日目`;$('weekday-value').textContent=wd;$('company-role-value').textContent=`${state.company.name}・エンジニア`;$('hp-value').textContent=Math.max(0,state.hp);$('trust-value').textContent=Math.max(0,state.trust);$('rank-value').textContent=currentRank().name;$('main-character-avatar').textContent=state.role.avatar;$('main-character-name').textContent=state.role.name;$('main-character-bonus').textContent=state.role.bonus;document.querySelectorAll('[data-phase]').forEach((e,i)=>{e.classList.toggle('active',i===state.phase);e.classList.toggle('done',i<state.phase)});
-$('task-list').innerHTML=state.tasks.map((t,i)=>`<button type="button" class="task task-card ${t.danger>=4?'danger':''} ${isUrgent(t)?'urgent':''}" data-task="${i}"><div class="task-art"><span>${t.icon}</span><b>${t.carry?'通常':'緊急'}</b></div><div class="deadline ${isUrgent(t)?'deadline-urgent':''}">${deadlineText(t)}</div><div class="topline"><h3>${t.name}</h3><span class="danger-badge">危険${t.danger}</span></div><p>${t.causeKnown?`原因：${t.cause}`:'原因：未特定'}</p><div class="tags">${(t.revealedAttrs.length?t.revealedAttrs:['属性不明']).map(a=>`<span class="tag">${a}</span>`).join('')}</div><div class="progress"><span style="width:${(t.max-t.remain)/t.max*100}%"></span></div><div class="task-footer"><span>進捗 ${t.max-t.remain}/${t.max}</span><span>${selectedCardIndex===null?'対応待ち':'実行'}</span></div></button>`).join('');document.querySelectorAll('[data-task]').forEach(e=>e.addEventListener('click',()=>selectedCardIndex===null?$('action-hint').textContent='先に対応カードを選択してください。':useCard(selectedCardIndex,Number(e.dataset.task))));
-$('hand').innerHTML=state.hand.map((c,i)=>{const m=TYPE_META[c.type]||TYPE_META.management;return `<button type="button" class="game-card ${selectedCardIndex===i?'selected':''}" data-card="${i}"><span class="power">${c.power}</span><div class="card-art">${m.icon}</div><span class="type">${m.label}</span><strong>${c.name}</strong><small>${c.desc}</small></button>`}).join('');document.querySelectorAll('[data-card]').forEach(e=>e.addEventListener('click',()=>{selectedCardIndex=Number(e.dataset.card);$('action-hint').textContent=`「${state.hand[selectedCardIndex].name}」を使うタスクを選択`;render()}))}
-function renderCareer(r){$('career-sheet').innerHTML=`<dl class="career-grid"><dt>通算連勤日数</dt><dd>${r.days}日</dd><dt>最終職種</dt><dd>エンジニア</dd><dt>最終職位</dt><dd>${r.rank}</dd><dt>最終勤務先</dt><dd>${r.company}</dd><dt>完了タスク</dt><dd>${r.resolved}件（原因不明：${r.unknown}件）</dd><dt>勤務経歴</dt><dd>${r.history.join('<br>')}</dd><dt>退職理由</dt><dd>${r.reason}</dd></dl>`}
-function renderBest(){const b=JSON.parse(localStorage.getItem('itWarriorBest')||'null');$('best-record').innerHTML=b?`最高 ${b.days}連勤 ／ 完了タスク${b.resolved}件`:'まだ職務経歴がありません。'}
-function log(t){const li=document.createElement('li');li.textContent=t;$('battle-log').prepend(li)}function show(id){$(id).classList.remove('hidden')}function hide(id){$(id).classList.add('hidden')}
-$('start-game').addEventListener('click',startGame);$('pass-turn').addEventListener('click',passTurn);$('retire-button').addEventListener('click',()=>endGame('自己都合退職'));$('retry-button').addEventListener('click',()=>{hide('result-screen');show('setup-screen');renderSetup()});$('reset-save').addEventListener('click',()=>{localStorage.removeItem('itWarriorBest');renderBest()});renderSetup();
+
+const LEVELS = {
+  1: { name: '警告', icon: '⚠️', className: 'level-1', patchCost: 1, score: 10 },
+  2: { name: '軽微', icon: '🐛', className: 'level-2', patchCost: 1, score: 35 },
+  3: { name: '重大', icon: '💥', className: 'level-3', patchCost: 2, score: 100 },
+  4: { name: '緊急', icon: '🔥', className: 'level-4', patchCost: 3, score: 280 },
+  5: { name: '本番障害', icon: '☠️', className: 'level-5', patchCost: 5, score: 800 }
+};
+
+const $ = (id) => document.getElementById(id);
+const randomItem = (items) => items[Math.floor(Math.random() * items.length)];
+
+let game = null;
+let selectedCompanyId = COMPANIES[0].id;
+let touchStart = null;
+let animationLocked = false;
+
+function selectedCompany() {
+  return COMPANIES.find((company) => company.id === selectedCompanyId) || COMPANIES[0];
+}
+
+function renderCompanyOptions() {
+  $('company-options').innerHTML = COMPANIES.map((company) => `
+    <button class="company-card ${company.id === selectedCompanyId ? 'selected' : ''}" data-company="${company.id}" type="button">
+      <span class="company-icon">${company.icon}</span>
+      <strong>${company.name}</strong>
+      <small>${company.desc}</small>
+    </button>
+  `).join('');
+
+  document.querySelectorAll('[data-company]').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedCompanyId = button.dataset.company;
+      renderCompanyOptions();
+    });
+  });
+}
+
+function emptyBoard() {
+  return Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
+}
+
+function startGame() {
+  const company = selectedCompany();
+  game = {
+    company,
+    board: emptyBoard(),
+    score: 0,
+    stability: company.stability,
+    maxStability: company.stability,
+    patches: company.patches,
+    moves: 0,
+    day: 1,
+    maxLevel: 1,
+    patchMode: false,
+    combo: 0,
+    lastSpawn: null,
+    gameOver: false
+  };
+
+  spawnBug();
+  spawnBug();
+  hide('title-screen');
+  hide('result-screen');
+  show('game-screen');
+  renderGame();
+  setStatus(`${company.name}へ入社。バグを本番障害になる前に処理しよう。`);
+}
+
+function availableCells() {
+  const cells = [];
+  game.board.forEach((row, rowIndex) => row.forEach((value, colIndex) => {
+    if (value === 0) cells.push([rowIndex, colIndex]);
+  }));
+  return cells;
+}
+
+function spawnBug() {
+  const cells = availableCells();
+  if (!cells.length) return false;
+  const [row, col] = randomItem(cells);
+  const level = Math.random() < game.company.spawnChance2 ? 2 : 1;
+  game.board[row][col] = level;
+  game.lastSpawn = `${row}-${col}`;
+  return true;
+}
+
+function slideAndMerge(line) {
+  const compact = line.filter(Boolean);
+  const result = [];
+  let merges = 0;
+  let gained = 0;
+  let maxCreated = 0;
+
+  for (let index = 0; index < compact.length; index += 1) {
+    if (compact[index] === compact[index + 1]) {
+      const nextLevel = Math.min(5, compact[index] + 1);
+      result.push(nextLevel);
+      merges += 1;
+      maxCreated = Math.max(maxCreated, nextLevel);
+      gained += LEVELS[nextLevel].score;
+      index += 1;
+    } else {
+      result.push(compact[index]);
+    }
+  }
+
+  while (result.length < BOARD_SIZE) result.push(0);
+  return { line: result, merges, gained, maxCreated };
+}
+
+function transpose(board) {
+  return board[0].map((_, colIndex) => board.map((row) => row[colIndex]));
+}
+
+function reverseRows(board) {
+  return board.map((row) => [...row].reverse());
+}
+
+function boardsEqual(a, b) {
+  return a.every((row, rowIndex) => row.every((value, colIndex) => value === b[rowIndex][colIndex]));
+}
+
+function calculateMove(direction) {
+  let working = game.board.map((row) => [...row]);
+  let reverseAfter = false;
+  let transposeAfter = false;
+
+  if (direction === 'right') {
+    working = reverseRows(working);
+    reverseAfter = true;
+  } else if (direction === 'up') {
+    working = transpose(working);
+    transposeAfter = true;
+  } else if (direction === 'down') {
+    working = reverseRows(transpose(working));
+    reverseAfter = true;
+    transposeAfter = true;
+  }
+
+  let merges = 0;
+  let gained = 0;
+  let maxCreated = 0;
+  working = working.map((line) => {
+    const merged = slideAndMerge(line);
+    merges += merged.merges;
+    gained += merged.gained;
+    maxCreated = Math.max(maxCreated, merged.maxCreated);
+    return merged.line;
+  });
+
+  if (reverseAfter) working = reverseRows(working);
+  if (transposeAfter) working = transpose(working);
+
+  return { board: working, merges, gained, maxCreated };
+}
+
+async function move(direction) {
+  if (!game || game.gameOver || animationLocked || game.patchMode) return;
+  const result = calculateMove(direction);
+  if (boardsEqual(game.board, result.board)) {
+    bumpBoard();
+    return;
+  }
+
+  animationLocked = true;
+  game.board = result.board;
+  game.moves += 1;
+  game.combo = result.merges ? game.combo + result.merges : 0;
+  game.patches += result.merges;
+
+  const comboMultiplier = game.company.comboBonus && game.combo >= 2 ? 1 + Math.min(game.combo, 6) * 0.1 : 1;
+  game.score += Math.round(result.gained * game.company.scoreRate * comboMultiplier);
+  game.maxLevel = Math.max(game.maxLevel, result.maxCreated || 1);
+
+  drainStability();
+  spawnBug();
+  updateDay();
+  renderGame();
+
+  if (result.merges) {
+    showFloat(`MERGE ×${result.merges}`, 'good');
+    if (game.combo >= 3) showBanner(`${game.combo} COMBO`);
+  }
+  if (result.maxCreated === 5) {
+    showBanner('本番障害 発生');
+    setStatus('本番障害が発生。安定度の低下が加速する。');
+  }
+
+  await wait(180);
+  animationLocked = false;
+  checkGameOver();
+}
+
+function drainStability() {
+  let drain = 0;
+  game.board.flat().forEach((level) => {
+    if (level === 4) drain += 1;
+    if (level === 5) drain += 7;
+  });
+  if (game.day % 5 === 0) drain += 2;
+  game.stability = Math.max(0, game.stability - drain);
+}
+
+function updateDay() {
+  const nextDay = Math.floor(game.moves / MOVES_PER_DAY) + 1;
+  if (nextDay > game.day) {
+    game.day = nextDay;
+    game.patches += 1;
+    game.stability = Math.min(game.maxStability, game.stability + 4);
+    showBanner(`${game.day}日目`);
+    setStatus(game.day % 5 === 0 ? '金曜日。障害負荷が上昇している。' : '翌日へ。パッチを1つ補充した。');
+  }
+}
+
+function togglePatchMode() {
+  if (!game || game.gameOver) return;
+  game.patchMode = !game.patchMode;
+  $('patch-mode-button').classList.toggle('active', game.patchMode);
+  $('board').classList.toggle('patch-mode', game.patchMode);
+  setStatus(game.patchMode ? '除去するバグをタップ。大きいバグほど多くのパッチが必要。' : '盤面をスワイプしてバグをマージ。');
+}
+
+function patchTile(row, col) {
+  if (!game.patchMode || game.gameOver) return;
+  const level = game.board[row][col];
+  if (!level) return;
+  const cost = LEVELS[level].patchCost;
+  if (game.patches < cost) {
+    showFloat(`パッチ不足 -${cost}`, 'danger');
+    bumpTile(row, col);
+    return;
+  }
+
+  game.patches -= cost;
+  game.board[row][col] = 0;
+  const reward = Math.round(LEVELS[level].score * 1.4 * game.company.scoreRate);
+  game.score += reward;
+  game.stability = Math.min(game.maxStability, game.stability + level * 2);
+  game.patchMode = false;
+  game.combo = 0;
+  renderGame();
+  showFloat(`FIX +${reward}`, 'good');
+  setStatus(`${LEVELS[level].name}バグを修正。本番安定度が回復した。`);
+}
+
+function canMove() {
+  if (availableCells().length) return true;
+  for (let row = 0; row < BOARD_SIZE; row += 1) {
+    for (let col = 0; col < BOARD_SIZE; col += 1) {
+      const value = game.board[row][col];
+      if (game.board[row + 1]?.[col] === value || game.board[row][col + 1] === value) return true;
+    }
+  }
+  return false;
+}
+
+function checkGameOver() {
+  if (game.stability <= 0) return endGame('本番安定度が0になり、サービスが停止した');
+  if (!canMove()) return endGame('盤面がバグで埋まり、修正不能になった');
+}
+
+function endGame(reason) {
+  if (!game || game.gameOver) return;
+  game.gameOver = true;
+  const record = {
+    days: game.day,
+    score: game.score,
+    maxLevel: game.maxLevel,
+    company: game.company.name,
+    reason
+  };
+  const best = JSON.parse(localStorage.getItem('bugMergeBest') || 'null');
+  if (!best || record.score > best.score) localStorage.setItem('bugMergeBest', JSON.stringify(record));
+
+  $('result-days').textContent = `${record.days}日`;
+  $('result-score').textContent = record.score.toLocaleString('ja-JP');
+  $('result-max').textContent = `${LEVELS[record.maxLevel].icon} ${LEVELS[record.maxLevel].name}`;
+  $('result-company').textContent = record.company;
+  $('result-reason').textContent = `退職理由：${reason}`;
+  $('result-title').textContent = reason.includes('自主') ? '自主退職しました' : '本番環境が停止しました';
+  hide('game-screen');
+  show('result-screen');
+}
+
+function renderGame() {
+  $('day-value').textContent = `${game.day}日`;
+  $('score-value').textContent = game.score.toLocaleString('ja-JP');
+  $('patch-value').textContent = game.patches;
+  $('company-value').textContent = `${game.company.icon} ${game.company.name}`;
+  $('stability-value').textContent = game.stability;
+  $('stability-bar').style.width = `${Math.max(0, game.stability / game.maxStability * 100)}%`;
+  $('stability-bar').classList.toggle('danger', game.stability <= game.maxStability * 0.3);
+  $('engineer-face').textContent = game.stability <= 25 ? '😵‍💫' : game.board.flat().includes(5) ? '😱' : '🧑‍💻';
+  $('patch-mode-button').classList.toggle('active', game.patchMode);
+  $('board').classList.toggle('patch-mode', game.patchMode);
+
+  $('board').innerHTML = game.board.map((row, rowIndex) => row.map((level, colIndex) => {
+    const meta = level ? LEVELS[level] : null;
+    const spawned = game.lastSpawn === `${rowIndex}-${colIndex}` ? 'spawned' : '';
+    return `<button class="bug-cell ${meta?.className || 'empty'} ${spawned}" data-row="${rowIndex}" data-col="${colIndex}" type="button" aria-label="${meta ? `${meta.name}バグ` : '空き'}">
+      ${meta ? `<span class="bug-icon">${meta.icon}</span><strong>${meta.name}</strong><small>修正 ${meta.patchCost}</small>` : ''}
+    </button>`;
+  }).join('')).join('');
+  game.lastSpawn = null;
+
+  document.querySelectorAll('.bug-cell').forEach((cell) => {
+    cell.addEventListener('click', () => patchTile(Number(cell.dataset.row), Number(cell.dataset.col)));
+  });
+}
+
+function renderBest() {
+  const best = JSON.parse(localStorage.getItem('bugMergeBest') || 'null');
+  $('best-record').innerHTML = best
+    ? `<span>最高記録</span><strong>${best.score.toLocaleString('ja-JP')}点</strong><small>${best.days}連勤 ／ ${best.company}</small>`
+    : '<span>最高記録</span><strong>未記録</strong><small>最初の出勤を始めよう</small>';
+}
+
+function setStatus(message) {
+  $('status-message').textContent = message;
+}
+
+function showFloat(text, tone) {
+  const node = document.createElement('div');
+  node.className = `float-text ${tone}`;
+  node.textContent = text;
+  $('fx-layer').append(node);
+  node.addEventListener('animationend', () => node.remove(), { once: true });
+}
+
+function showBanner(text) {
+  const node = document.createElement('div');
+  node.className = 'combo-banner';
+  node.textContent = text;
+  $('fx-layer').append(node);
+  node.addEventListener('animationend', () => node.remove(), { once: true });
+}
+
+function bumpBoard() {
+  $('board').classList.remove('bump');
+  void $('board').offsetWidth;
+  $('board').classList.add('bump');
+}
+
+function bumpTile(row, col) {
+  const tile = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+  if (!tile) return;
+  tile.classList.remove('bump-tile');
+  void tile.offsetWidth;
+  tile.classList.add('bump-tile');
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function show(id) { $(id).classList.remove('hidden'); }
+function hide(id) { $(id).classList.add('hidden'); }
+
+function openDialog(id) {
+  const dialog = $(id);
+  if (!dialog.open) dialog.showModal();
+}
+
+function closeDialog(id) {
+  const dialog = $(id);
+  if (dialog.open) dialog.close();
+}
+
+$('start-button').addEventListener('click', startGame);
+$('retry-button').addEventListener('click', startGame);
+$('back-button').addEventListener('click', () => {
+  hide('result-screen');
+  show('title-screen');
+  renderBest();
+});
+$('patch-mode-button').addEventListener('click', togglePatchMode);
+$('howto-button').addEventListener('click', () => openDialog('howto-dialog'));
+$('close-howto').addEventListener('click', () => closeDialog('howto-dialog'));
+$('pause-button').addEventListener('click', () => openDialog('menu-dialog'));
+$('resume-button').addEventListener('click', () => closeDialog('menu-dialog'));
+$('retire-button').addEventListener('click', () => {
+  closeDialog('menu-dialog');
+  endGame('自主退職');
+});
+
+document.querySelectorAll('[data-move]').forEach((button) => {
+  button.addEventListener('click', () => move(button.dataset.move));
+});
+
+$('board').addEventListener('touchstart', (event) => {
+  if (game?.patchMode) return;
+  const touch = event.changedTouches[0];
+  touchStart = { x: touch.clientX, y: touch.clientY };
+}, { passive: true });
+
+$('board').addEventListener('touchend', (event) => {
+  if (!touchStart || game?.patchMode) return;
+  const touch = event.changedTouches[0];
+  const dx = touch.clientX - touchStart.x;
+  const dy = touch.clientY - touchStart.y;
+  touchStart = null;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
+  move(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+}, { passive: true });
+
+document.addEventListener('keydown', (event) => {
+  const directions = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
+  if (directions[event.key]) {
+    event.preventDefault();
+    move(directions[event.key]);
+  }
+});
+
+renderCompanyOptions();
+renderBest();
