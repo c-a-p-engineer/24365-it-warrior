@@ -1,5 +1,4 @@
 const $ = (id) => document.getElementById(id);
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const pick = (items) => items[Math.floor(Math.random() * items.length)];
 
 const START_LIVES = 3;
@@ -17,9 +16,25 @@ const LEVELS = [
 const SERVICES = ['auth', 'payment', 'cache', 'profile', 'order', 'search', 'mail', 'upload'];
 const ACTIONS = ['success', 'failed', 'timeout', 'retry', 'ready', 'denied', 'slow', 'complete'];
 const IDS = ['A82F', 'C91B', 'F10D', 'D44A', 'B77E', 'E09C'];
+const NODES = ['api-01', 'api-02', 'worker-03', 'db-primary', 'edge-02'];
 
 let state = null;
 let spawnTimer = null;
+
+function installRuntimeStyles() {
+  if (document.getElementById('multiline-log-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'multiline-log-styles';
+  style.textContent = `
+    .log-row.multi-line{top:-72px;min-height:64px;padding:6px 9px;white-space:normal;display:flex;flex-direction:column;justify-content:center;gap:3px}
+    .log-main,.log-detail{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .log-detail{padding-left:12px;border-left:2px solid rgba(99,216,255,.28);color:var(--muted);font-size:.76em;line-height:1.25}
+    .log-row.type-error .log-detail{border-left-color:rgba(255,95,120,.45)}
+    .log-row.type-warn .log-detail{border-left-color:rgba(255,209,102,.45)}
+    @media(max-width:360px){.log-row.multi-line{min-height:60px;padding-top:5px;padding-bottom:5px}.log-detail{font-size:.7em}}
+  `;
+  document.head.append(style);
+}
 
 function makeState() {
   return {
@@ -49,11 +64,12 @@ function startGame() {
   hide('result-screen');
   show('game-screen');
   $('log-lane').innerHTML = '';
+  document.body.classList.remove('human-grep', 'paused');
   renderAll();
   setTarget(true);
   scheduleSpawn(260);
   burst('SYSTEM MONITOR START', 'info');
-  react('focus', '異常ログを探せ', '光った行をタップ');
+  react('異常ログを探せ', '光った行をタップ');
 }
 
 function scheduleSpawn(delay) {
@@ -82,13 +98,12 @@ function updateSpeed() {
   const progressBoost = state.found / 22;
   const timeBoost = state.elapsed / 80;
   state.speedFactor = Math.min(3.2, 1 + progressBoost + timeBoost);
-  const thresholds = [1.3, 1.6, 2, 2.5, 3];
-  const reached = thresholds.filter((value) => state.speedFactor >= value).pop();
+  const reached = [1.3, 1.6, 2, 2.5, 3].filter((value) => state.speedFactor >= value).pop();
   if (reached && reached > state.lastSpeedNotice) {
     state.lastSpeedNotice = reached;
     burst(`SPEED ${reached.toFixed(1)}x`, reached >= 2.5 ? 'danger' : 'info');
     restart($('game-screen'), 'combo-aura');
-    react('panic', 'ログ加速', `${reached.toFixed(1)}倍速`);
+    react('ログ加速', `${reached.toFixed(1)}倍速`);
   }
 }
 
@@ -100,7 +115,7 @@ function setTarget(initial = false) {
   restart($('target-panel'), initial ? 'target-enter' : 'target-swap');
   if (!initial) {
     burst('NEW TARGET', 'info');
-    react('focus', target.label, '同じ特徴を探せ');
+    react(target.label, '同じ特徴を探せ');
   }
 }
 
@@ -124,8 +139,8 @@ function makeLog(forceMatch = false) {
       else if (key === 'payrnent') service = 'payrnent';
     });
   } else {
-    const text = `${type} ${service} ${action} ${status} ${id}`;
-    if (target.keys.every((key) => text.includes(key))) {
+    const candidate = `${type} ${service} ${action} ${status} ${id}`;
+    if (target.keys.every((key) => candidate.includes(key))) {
       service = service === 'payment' ? 'order' : service;
       type = type === 'ERROR' ? 'INFO' : type;
       status = status === '500' ? '200' : status;
@@ -135,9 +150,32 @@ function makeLog(forceMatch = false) {
   }
 
   const now = new Date();
-  const time = [now.getHours(), now.getMinutes(), now.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':');
-  const text = `${time} ${type.padEnd(5)} ${service} ${action} ${status} REQ=${id}`;
-  return { id: ++state.rowId, text, match: target.keys.every((key) => text.includes(key)), type };
+  const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
+    .map((n) => String(n).padStart(2, '0'))
+    .join(':');
+  const multilineChance = Math.min(0.18 + state.level * 0.035, 0.46);
+  const multiline = !forceMatch && Math.random() < multilineChance;
+  const node = pick(NODES);
+  const main = multiline
+    ? `${time} ${type.padEnd(5)} ${service} ${status}`
+    : `${time} ${type.padEnd(5)} ${service} ${action} ${status} REQ=${id}`;
+  const detail = multiline
+    ? pick([
+        `↳ ${action} REQ=${id} node=${node}`,
+        `↳ at ${service}.handler action=${action} REQ=${id}`,
+        `↳ cause=${action} trace=${id} host=${node}`
+      ])
+    : '';
+  const searchableText = `${main} ${detail}`;
+
+  return {
+    id: ++state.rowId,
+    main,
+    detail,
+    multiline,
+    match: target.keys.every((key) => searchableText.includes(key)),
+    type
+  };
 }
 
 function spawnLog() {
@@ -145,11 +183,13 @@ function spawnLog() {
   const log = makeLog(tutorialMatch);
   const row = document.createElement('button');
   row.type = 'button';
-  row.className = `log-row type-${log.type.toLowerCase()}${tutorialMatch ? ' tutorial-target' : ''}`;
+  row.className = `log-row type-${log.type.toLowerCase()}${log.multiline ? ' multi-line' : ''}${tutorialMatch ? ' tutorial-target' : ''}`;
   row.dataset.match = String(log.match);
   row.dataset.id = String(log.id);
   row.style.setProperty('--travel-time', `${currentTravelTime()}ms`);
-  row.innerHTML = tokenize(log.text);
+  row.innerHTML = log.multiline
+    ? `<span class="log-main">${tokenize(log.main)}</span><span class="log-detail">${tokenize(log.detail)}</span>`
+    : `<span class="log-main">${tokenize(log.main)}</span>`;
   row.addEventListener('click', () => selectRow(row));
   row.addEventListener('animationend', (event) => {
     if (event.animationName !== 'log-travel') return;
@@ -208,7 +248,7 @@ function correctRow(row) {
     $('tutorial-hand').classList.add('hidden');
     burst('GOOD!', 'good');
   }
-  react('win', `${state.combo} COMBO`, '次の異常を探せ');
+  react(`${state.combo} COMBO`, '次の異常を探せ');
   row.addEventListener('animationend', () => row.remove(), { once: true });
   advanceTarget();
   updateSpeed();
@@ -223,7 +263,7 @@ function loseLife(reason, row) {
   restart($('game-screen'), 'screen-hit');
   restart($('time-value'), 'metric-pop');
   restart($('operator-face'), state.lives ? 'operator-panic' : 'operator-miss');
-  react('panic', reason, `残りライフ ${state.lives}`);
+  react(reason, `残りライフ ${state.lives}`);
   renderAll();
   if (state.lives <= 0) endGame('ライフが尽きた');
 }
@@ -299,15 +339,18 @@ function pauseGame() {
   document.body.classList.add('paused');
   $('pause-dialog').showModal();
 }
+
 function resumeGame() {
   state.paused = false;
   document.body.classList.remove('paused');
   $('pause-dialog').close();
 }
-function react(_mode, main, sub) {
+
+function react(main, sub) {
   $('operator-message').textContent = main;
   $('sub-message').textContent = sub;
 }
+
 function restart(element, className) {
   if (!element) return;
   element.classList.remove(className);
@@ -337,6 +380,7 @@ function burst(text, tone = 'info') {
   node.addEventListener('animationend', () => removeFxNode(node), { once: true });
   setTimeout(() => removeFxNode(node), 1600);
 }
+
 function popAt(row, text, tone) {
   const rect = row.getBoundingClientRect();
   const node = document.createElement('div');
@@ -348,6 +392,7 @@ function popAt(row, text, tone) {
   node.addEventListener('animationend', () => removeFxNode(node), { once: true });
   setTimeout(() => removeFxNode(node), 1200);
 }
+
 function createFragments(row, tone) {
   const rect = row.getBoundingClientRect();
   for (let index = 0; index < 8; index += 1) {
@@ -361,6 +406,7 @@ function createFragments(row, tone) {
     node.addEventListener('animationend', () => node.remove(), { once: true });
   }
 }
+
 function createParticles(count) {
   for (let index = 0; index < count; index += 1) {
     const node = document.createElement('i');
@@ -371,21 +417,34 @@ function createParticles(count) {
     node.addEventListener('animationend', () => node.remove(), { once: true });
   }
 }
-function noiseFlash() { restart($('game-screen'), 'noise-flash'); }
+
+function noiseFlash() {
+  restart($('game-screen'), 'noise-flash');
+}
+
 function renderBest() {
   const best = JSON.parse(localStorage.getItem('meGrepBest') || 'null');
   $('best-record').innerHTML = best
     ? `<span>最高記録</span><strong>${best.score.toLocaleString('ja-JP')}点</strong><small>${best.combo} COMBO ／ ${best.found}件発見</small>`
     : '<span>最高記録</span><strong>未記録</strong><small>監視を開始しよう</small>';
 }
+
 function show(id) { $(id).classList.remove('hidden'); }
 function hide(id) { $(id).classList.add('hidden'); }
 
 $('start-button').addEventListener('click', startGame);
 $('retry-button').addEventListener('click', startGame);
-$('back-button').addEventListener('click', () => { hide('result-screen'); show('title-screen'); renderBest(); });
+$('back-button').addEventListener('click', () => {
+  hide('result-screen');
+  show('title-screen');
+  renderBest();
+});
 $('pause-button').addEventListener('click', pauseGame);
 $('resume-button').addEventListener('click', resumeGame);
-$('quit-button').addEventListener('click', () => { $('pause-dialog').close(); endGame('自主的に監視を終了した'); });
+$('quit-button').addEventListener('click', () => {
+  $('pause-dialog').close();
+  endGame('自主的に監視を終了した');
+});
 
+installRuntimeStyles();
 renderBest();
