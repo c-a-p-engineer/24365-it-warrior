@@ -1,5 +1,9 @@
 # 24365 IT戦士 ― 目grep
 
+<p align="center">
+  <img src="assets/logo/24365-it-warrior-logo.png" alt="24365 IT戦士 ― 目grep" width="720">
+</p>
+
 流れ続けるログから検索条件に一致する行を見つけ、タップするスマートフォン向け高速探索ゲームです。
 
 ## 遊ぶ
@@ -36,6 +40,13 @@
 - 一定速度へ到達すると画面演出で通知
 - 後半は複合条件や類似文字判定が増える
 
+## ロゴ・SNS共有
+
+- 正式ロゴ：`assets/logo/24365-it-warrior-logo.png`
+- favicon / Apple Touch Icon：正式ロゴを使用
+- OGP / Twitter Card：正式ロゴを使用
+- 公開URL：`https://c-a-p-engineer.github.io/24365-it-warrior/`
+
 ## ドキュメント
 
 - [ゲーム企画概要](docs/game-design.md)
@@ -55,4 +66,4 @@
 
 **プレイ可能なMVPです。**
 
-現在はCSS・絵文字・テキストを仮素材として使用しています。
+正式ロゴは本番素材として採用済みです。キャラクター、効果音、BGMは引き続き仮素材または未実装です。
